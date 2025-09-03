@@ -44,7 +44,7 @@ zone "local.rpz" {
 
 
 
-# Windows PowerShell Scripts
+# Windows DNS Server 黑名單自動部署 PowerShell Scripts
 
 專案包含三個 PowerShell 腳本，用於處理、轉換及更新 NICS 黑名單，並可自動上傳至 GitHub Gist 或發送 Email 通知。
 
