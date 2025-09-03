@@ -60,6 +60,14 @@ NICS-PowerShell-Scripts/
 └─ Logs/                     # 本機及 NAS 日誌存放資料夾
 ```
 
+## 目錄
+
+1. [NICS-Update.ps1](#nics-updateps1)
+2. [NICS-To-AdGuard.ps1](#nics-to-adguardps1)  
+3. [NICS-To-Gist.ps1](#nics-to-gistps1)  
+
+---
+
 ## 腳本功能
 
 ### 1. NICS-Update.ps1
@@ -107,6 +115,17 @@ NICS-PowerShell-Scripts/
                │ (可選)       │
                └──────────────┘
 ```
+
+**使用方式：**
+
+```powershell
+.\NICS-Update.ps1      -SRC "C:\Temp\blacklist.txt" `
+                       -DST "C:\Temp\AdGuard.txt" `
+                       -NASPath "\\NAS\Logs" `
+                       -MailFrom "noreply@example.com" `
+                       -MailTo "admin@example.com" `
+                       -SMTPServer "smtp.example.com" `
+                       -SMTPPort 25
 
 ## 使用說明
 
