@@ -1,21 +1,21 @@
 # ======================================================
 # NICS-To-AdGuard.ps1 20250903-005
-# ¥\¯à:
-#  - ÀË¬d­ì©l¶Â¦W³æ¬O§_¦s¦b ($SRC)¡C
-#  - ¤ñ¹ï SHA256 ½T»{¬O§_¦³§ó·s¡AµL§ó·s«h¸õ¹L¡]¤´°O¿ı¯Ó®É¡^¡C
-#  - Âà´«¬° AdGuard ®a¥Î®æ¦¡¡A¦Û°Ê¥[¤W header »P¨C¦æ ||...^¡C
-#  - ¦Û°Ê²¾°£¨Ó·½¤¤ªº http:// »P https:// «eºó¡C
-#  - ²Î­pµ§¼Æ ¨Ã¼g¤J log¡C
-#  - ¼g¤J¥»¾÷¤Î NAS log¡]¦pªG«ü©w $NASPath¡^¡C
-#  - §ó·s SHA256 ¬ö¿ıÀÉ¡C
-#  - ¦¨¥\«á¦Û°Ê½Æ»s $DST ¦Ü NAS (AdGuard.txt)¡C
-#  - µo°e Email ³qª¾¡]¶È¦b¦³§ó·s®É¡^¡C
-#  - ¿é¥X§¹¦¨°T®§»P¯Ó®É²Î­p¡C
+# åŠŸèƒ½:
+#  - æª¢æŸ¥åŸå§‹é»‘åå–®æ˜¯å¦å­˜åœ¨ ($SRC)ã€‚
+#  - æ¯”å° SHA256 ç¢ºèªæ˜¯å¦æœ‰æ›´æ–°ï¼Œç„¡æ›´æ–°å‰‡è·³éï¼ˆä»è¨˜éŒ„è€—æ™‚ï¼‰ã€‚
+#  - è½‰æ›ç‚º AdGuard å®¶ç”¨æ ¼å¼ï¼Œè‡ªå‹•åŠ ä¸Š header èˆ‡æ¯è¡Œ ||...^ã€‚
+#  - è‡ªå‹•ç§»é™¤ä¾†æºä¸­çš„ http:// èˆ‡ https:// å‰ç¶´ã€‚
+#  - çµ±è¨ˆç­†æ•¸ ä¸¦å¯«å…¥ logã€‚
+#  - å¯«å…¥æœ¬æ©ŸåŠ NAS logï¼ˆå¦‚æœæŒ‡å®š $NASPathï¼‰ã€‚
+#  - æ›´æ–° SHA256 ç´€éŒ„æª”ã€‚
+#  - æˆåŠŸå¾Œè‡ªå‹•è¤‡è£½ $DST è‡³ NAS (AdGuard.txt)ã€‚
+#  - ç™¼é€ Email é€šçŸ¥ï¼ˆåƒ…åœ¨æœ‰æ›´æ–°æ™‚ï¼‰ã€‚
+#  - è¼¸å‡ºå®Œæˆè¨Šæ¯èˆ‡è€—æ™‚çµ±è¨ˆã€‚
 # ======================================================
 param (
-    [string]$SRC,       # ­ì©l¶Â¦W³æ
-    [string]$DST,       # Âà´««áÀÉ®×
-    [string]$NASPath,   # NAS LOG »P¿é¥X¥Ø¿ı
+    [string]$SRC,       # åŸå§‹é»‘åå–®
+    [string]$DST,       # è½‰æ›å¾Œæª”æ¡ˆ
+    [string]$NASPath,   # NAS LOG èˆ‡è¼¸å‡ºç›®éŒ„
     [string]$MailFrom,
     [string]$MailTo,
     [string]$SMTPServer,
@@ -23,7 +23,7 @@ param (
 )
 $start = Get-Date
 # -----------------------------
-# ³]©w LOG (¨C¤é¤ÀÀÉ)
+# è¨­å®š LOG (æ¯æ—¥åˆ†æª”)
 # -----------------------------
 $logFile    = "C:\TEMP\NICS-Policy-$(Get-Date -Format yyyyMMdd).log"
 $logFileNAS = if ($NASPath) { Join-Path $NASPath "NICS-Policy-$(Get-Date -Format yyyyMMdd).log" } else { $null }
@@ -36,28 +36,28 @@ function Write-Log {
         try {
             Add-Content -Path $logFileNAS -Value "[$timestamp] $env:COMPUTERNAME $Message" -ErrorAction Stop
         } catch {
-            Add-Content -Path $logFile -Value "[$timestamp] µLªk¼g¤J NAS Log: $($_.Exception.Message)"
+            Add-Content -Path $logFile -Value "[$timestamp] ç„¡æ³•å¯«å…¥ NAS Log: $($_.Exception.Message)"
         }
     }
 }
 # -----------------------------
-# ²M²z¶W¹L´Á­­ªº log
+# æ¸…ç†è¶…éæœŸé™çš„ log
 # -----------------------------
-# ¥»¾÷ log «O¯d 7 ¤é
+# æœ¬æ©Ÿ log ä¿ç•™ 7 æ—¥
 Get-ChildItem -Path $logDir -Filter "NICS-Policy-*.log" |
     Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
     ForEach-Object {
         try { Remove-Item $_.FullName -Force } 
-        catch { Write-Log "µLªk§R°£ÂÂ¥»¾÷ Log: $($_.FullName)¡A­ì¦]: $($_.Exception.Message)" }
+        catch { Write-Log "ç„¡æ³•åˆªé™¤èˆŠæœ¬æ©Ÿ Log: $($_.FullName)ï¼ŒåŸå› : $($_.Exception.Message)" }
     }
 
-# NAS log «O¯d 30 ¤é
+# NAS log ä¿ç•™ 30 æ—¥
 if ($NASPath) {
     Get-ChildItem -Path $NASPath -Filter "NICS-Policy-*.log" |
         Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-30) } |
         ForEach-Object {
             try { Remove-Item $_.FullName -Force } 
-            catch { Write-Log "µLªk§R°£ÂÂ NAS Log: $($_.FullName)¡A­ì¦]: $($_.Exception.Message)" }
+            catch { Write-Log "ç„¡æ³•åˆªé™¤èˆŠ NAS Log: $($_.FullName)ï¼ŒåŸå› : $($_.Exception.Message)" }
         }
 }
 
@@ -66,39 +66,39 @@ $ErrorActionPreference = "Stop"
 Write-Log "========== NICS-To-AdGuard.ps1 20250903-005 =========="
 
 # -----------------------------
-# ÀË¬d­ì©lÀÉ¬O§_¦s¦b
+# æª¢æŸ¥åŸå§‹æª”æ˜¯å¦å­˜åœ¨
 # -----------------------------
-Write-Log "Step 1: ÀË¬d­ì©lÀÉ¬O§_¦s¦b"
+Write-Log "Step 1: æª¢æŸ¥åŸå§‹æª”æ˜¯å¦å­˜åœ¨"
 if (-not (Test-Path $SRC)) {
-    Write-Log "        ¨Ó·½ÀÉ¤£¦s¦b: $SRC"
+    Write-Log "        ä¾†æºæª”ä¸å­˜åœ¨: $SRC"
     $end = Get-Date
     $duration = "{0:N2}" -f (($end - $start).TotalSeconds)
-    Write-Log "        [INFO] µ²§ô¡A¨Ó·½¤£¦s¦b¡AÁ`¯Ó®É $duration ¬í"
+    Write-Log "        [INFO] çµæŸï¼Œä¾†æºä¸å­˜åœ¨ï¼Œç¸½è€—æ™‚ $duration ç§’"
     Write-Log "========== NICS-To-AdGuard.ps1 20250903-005 =========="
     exit
 }
 
 # -----------------------------
-# ­pºâ­ì©lÀÉ SHA256
+# è¨ˆç®—åŸå§‹æª” SHA256
 # -----------------------------
-Write-Log "Step 2: ­pºâ­ì©lÀÉ SHA256"
+Write-Log "Step 2: è¨ˆç®—åŸå§‹æª” SHA256"
 $hashFile = "$SRC.sha256"
 $sha256   = Get-FileHash -Path $SRC -Algorithm SHA256 | Select-Object -ExpandProperty Hash
 $oldHash  = if (Test-Path $hashFile) { Get-Content $hashFile -ErrorAction SilentlyContinue } else { "" }
 
 if ($sha256 -eq $oldHash) {
-    Write-Log "        ¶Â¦W³æµLÅÜ§ó¡A¸õ¹LÂà´«"
+    Write-Log "        é»‘åå–®ç„¡è®Šæ›´ï¼Œè·³éè½‰æ›"
     $end = Get-Date
     $duration = "{0:N2}" -f (($end - $start).TotalSeconds)
-    Write-Log "        [INFO] §¹¦¨¡]µLÅÜ§ó¡^¡AÁ`¯Ó®É $duration ¬í"
+    Write-Log "        [INFO] å®Œæˆï¼ˆç„¡è®Šæ›´ï¼‰ï¼Œç¸½è€—æ™‚ $duration ç§’"
     Write-Log "========== NICS-To-AdGuard.ps1 20250903-005 =========="
     exit
 }
 
 # -----------------------------
-# Âà´« AdGuard ®æ¦¡¨Ã²Î­pµ§¼Æ
+# è½‰æ› AdGuard æ ¼å¼ä¸¦çµ±è¨ˆç­†æ•¸
 # -----------------------------
-Write-Log "Step 3: Âà´« AdGuard ®æ¦¡¨Ã²Î­pµ§¼Æ"
+Write-Log "Step 3: è½‰æ› AdGuard æ ¼å¼ä¸¦çµ±è¨ˆç­†æ•¸"
 
 $lines = Get-Content $SRC | Where-Object { $_.Trim() -ne "" } |
     ForEach-Object { ($_ -replace '^(https?://)', '') }
@@ -112,53 +112,53 @@ $AdGuardHeader = @(
 )
 $AdGuardBody = $lines | ForEach-Object { "||$_^" }
 
-# ¦X¨Ö header »P body
+# åˆä½µ header èˆ‡ body
 $AdGuardContent = $AdGuardHeader + $AdGuardBody
 Set-Content -Path $DST -Value $AdGuardContent -Encoding UTF8
 
-Write-Log "        ¶Â¦W³æ¤wÂà´«¬° AdGuard ®æ¦¡: $DST¡AÁ`µ§¼Æ: $recordCount"
+Write-Log "        é»‘åå–®å·²è½‰æ›ç‚º AdGuard æ ¼å¼: $DSTï¼Œç¸½ç­†æ•¸: $recordCount"
 
-# §ó·s SHA256
+# æ›´æ–° SHA256
 Set-Content -Path $hashFile -Value $sha256
 
 # -----------------------------
-# ½Æ»s¦Ü NAS (¦pªG«ü©w)
+# è¤‡è£½è‡³ NAS (å¦‚æœæŒ‡å®š)
 # -----------------------------
 if ($NASPath) {
     try {
         $nasFile = Join-Path $NASPath "AdGuard.txt"
         Copy-Item -Path $DST -Destination $nasFile -Force
-        Write-Log "        ¤w½Æ»s AdGuard ¶Â¦W³æ¦Ü NAS: $nasFile"
+        Write-Log "        å·²è¤‡è£½ AdGuard é»‘åå–®è‡³ NAS: $nasFile"
     } catch {
-        Write-Log "        ½Æ»s¦Ü NAS ¥¢±Ñ: $($_.Exception.Message)"
+        Write-Log "        è¤‡è£½è‡³ NAS å¤±æ•—: $($_.Exception.Message)"
     }
 }
 
 # -----------------------------
-# µo°e Email ³qª¾¡]¶È¦b¦³§ó·s¡^
+# ç™¼é€ Email é€šçŸ¥ï¼ˆåƒ…åœ¨æœ‰æ›´æ–°ï¼‰
 # -----------------------------
 if ($MailFrom -and $MailTo -and $SMTPServer) {
     $BodyEmail = @"
-¶Â¦W³æ¤w§ó·s¨ÃÂà´«¬° AdGuard ®æ¦¡
-ÀÉ®×¦WºÙ¡G$DST
-Á`µ§¼Æ¡G$recordCount
-®É¶¡¡G$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+é»‘åå–®å·²æ›´æ–°ä¸¦è½‰æ›ç‚º AdGuard æ ¼å¼
+æª”æ¡ˆåç¨±ï¼š$DST
+ç¸½ç­†æ•¸ï¼š$recordCount
+æ™‚é–“ï¼š$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
 "@
     try {
-        Send-MailMessage -From $MailFrom -To $MailTo -Subject "[NICS] ¶Â¦W³æ¤w§ó·s¨ÃÂà´«¬° AdGuard ®æ¦¡" `
+        Send-MailMessage -From $MailFrom -To $MailTo -Subject "[NICS] é»‘åå–®å·²æ›´æ–°ä¸¦è½‰æ›ç‚º AdGuard æ ¼å¼" `
             -Body $BodyEmail -SmtpServer $SMTPServer -Port $SMTPPort -UseSsl:$false -Encoding UTF8
-        Write-Log "        Email ¤wµo°eµ¹ $MailTo"
+        Write-Log "        Email å·²ç™¼é€çµ¦ $MailTo"
     } catch {
-        Write-Log "        Email µo°e¥¢±Ñ: $($_.Exception.Message)"
+        Write-Log "        Email ç™¼é€å¤±æ•—: $($_.Exception.Message)"
     }
 }
 
 # -----------------------------
-# §¹¦¨°T®§»P¯Ó®É
+# å®Œæˆè¨Šæ¯èˆ‡è€—æ™‚
 # -----------------------------
 $end = Get-Date
 $duration = "{0:N2}" -f (($end - $start).TotalSeconds)
-Write-Log "        [INFO] §¹¦¨¡AÂà´«ÀÉ®×¤w¥Í¦¨: $DST¡AÁ`¯Ó®É $duration ¬í¡AÁ`µ§¼Æ $recordCount"
+Write-Log "        [INFO] å®Œæˆï¼Œè½‰æ›æª”æ¡ˆå·²ç”Ÿæˆ: $DSTï¼Œç¸½è€—æ™‚ $duration ç§’ï¼Œç¸½ç­†æ•¸ $recordCount"
 Write-Log "========== NICS-To-AdGuard.ps1 20250903-005 =========="
 
-# Write-Host "[INFO] §¹¦¨¡AÂà´«ÀÉ®×¤w¥Í¦¨: $DST¡AÁ`µ§¼Æ: $recordCount"
+# Write-Host "[INFO] å®Œæˆï¼Œè½‰æ›æª”æ¡ˆå·²ç”Ÿæˆ: $DSTï¼Œç¸½ç­†æ•¸: $recordCount"
