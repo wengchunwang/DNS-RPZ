@@ -53,9 +53,9 @@ zone "local.rpz" {
 ```text
 NICS-PowerShell-Scripts/
 │
-├─ NICS-To-AdGuard.ps1       # 將原始黑名單轉換成 AdGuard 格式
-├─ NICS-To-Gist.ps1          # 將黑名單上傳至 GitHub Gist
 ├─ NICS-Update.ps1           # 自動更新，整合轉換 + 上傳 + 日誌
+├─ NICS-To-Blacklist.ps1     # 將原始黑名單轉換為指定格式 (AdGuard / Pi-hole / All)
+├─ NICS-To-Gist.ps1          # 將黑名單上傳至 GitHub Gist
 ├─ README.md                 # 專案說明文件
 └─ Logs/                     # 本機及 NAS 日誌存放資料夾
 ```
@@ -63,7 +63,7 @@ NICS-PowerShell-Scripts/
 ## 目錄
 
 1. [NICS-Update.ps1](#nics-updateps1)
-2. [NICS-To-AdGuard.ps1](#nics-to-adguardps1)  
+2. [NICS-To-Blacklist.ps1](#nics-to-adguardps1)  
 3. [NICS-To-Gist.ps1](#nics-to-gistps1)  
 
 ---
@@ -76,10 +76,10 @@ NICS-PowerShell-Scripts/
 - 發送 Email 通知（可選）
 - 自動清理本機 7 日以上 Log、NAS 30 日以上 Log
 
-### 2. NICS-To-AdGuard.ps1
+### 2. NICS-To-Blacklist.ps1
 - 檢查原始黑名單是否存在
 - 計算 SHA256 確認是否有更新
-- 轉換為 AdGuard 格式，自動加上 header 與每行 `||...^`
+- 轉換為指定格式 (AdGuard / Pi-hole / All)，自動加上 header
 - 統計筆數並寫入本機及 NAS Log
 - 更新 SHA256 紀錄檔
 - 發送 Email 通知（可選）
@@ -101,7 +101,7 @@ NICS-PowerShell-Scripts/
         ┌───────────────┴───────────────┐
         │                               │
 ┌───────▼────────┐              ┌───────▼────────┐
-│ NICS-To-AdGuard│              │ NICS-To-Gist   │
+│ NICS-To-Blacklist│              │ NICS-To-Gist   │
 │ .ps1           │              │ .ps1           │
 │ 轉換黑名單      │              │ 上傳至 GitHub │
 │ 產生 AdGuard   │              │ Gist           │
