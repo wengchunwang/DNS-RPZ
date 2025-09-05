@@ -1,5 +1,5 @@
 # ======================================================
-# NICS-Update.ps1 20250903-001
+# NICS-Update.ps1 
 # 功能: 自動下載 NICS 黑名單，更新 DNS QueryResolutionPolicy
 #       僅在黑名單有更新時才重建 Policy，完成後發送 Email
 # 適用: 少量黑名單 (<500)，方便直接檢視與管理
@@ -16,6 +16,7 @@ param(
 )
 
 $start = Get-Date
+$version = "2025-09-05.004"
 $source = "https://ironcloak.nics.nat.gov.tw/api/get_windows_blacklist_dn/$Token"
 # -----------------------------
 # 設定 LOG (每日分檔)
@@ -41,6 +42,7 @@ function Write-Log {
 # -----------------------------
 
 # 本機 log 保留 7 日
+$logDir = Split-Path $logFile
 Get-ChildItem -Path $logDir -Filter "NICS-Policy-*.log" |
     Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
     ForEach-Object {
@@ -60,7 +62,7 @@ if ($NASPath) {
 
 # 建立暫存資料夾
 if (!(Test-Path "C:\TEMP")) { New-Item -ItemType Directory -Path "C:\TEMP" | Out-Null }
-Write-Log "========== NICS-Update.ps1 20250903-001 =========="
+Write-Log "========== NICS-Update.ps1 $version =========="
 
 # Step 1: 下載黑名單到暫存檔
 Write-Log "Step 1: 下載黑名單到暫存檔"
@@ -144,5 +146,4 @@ try {
 $end = Get-Date
 $duration = ($end - $start).TotalSeconds
 Write-Log "完成執行，總耗時 $duration 秒"
-Write-Log "========== NICS-Update.ps1 20250903-001 =========="
-# Write-Host "[INFO] 完成執行，總耗時 $duration 秒"
+Write-Log "========== NICS-Update.ps1 END =========="
