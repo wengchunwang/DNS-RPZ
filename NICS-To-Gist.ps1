@@ -1,35 +1,9 @@
 # ======================================================
-# NICS-To-Gist.ps1 20250903-001
+# NICS-To-Gist.ps1
 # 功能: 自動將本地檔案上傳或更新至 GitHub Gist，並可寄送通知 Email
 # 適用: 小型文字檔案（如 NICS 黑名單、設定檔等）上傳及版本管理
 # ======================================================
-<#
-.SYNOPSIS
-    建置黑名單、上傳/更新 Gist，並透過 Email 通知。
-.DESCRIPTION
-    - 自動建置黑名單檔案
-    - 上傳或更新 GitHub Gist
-    - 固定頁面 URL + /raw URL
-    - 發送 Email 通知收件者
-.PARAMETER SRC
-    黑名單檔案路徑 (預設 C:\temp\NICS-RPZ.txt)
-.PARAMETER Token
-    GitHub Personal Access Token (必填)
-.PARAMETER Description
-    Gist 說明文字
-.PARAMETER From
-    Email 寄件者
-.PARAMETER To
-    Email 收件者
-.PARAMETER SmtpServer
-    SMTP 伺服器
-.PARAMETER SmtpPort
-    SMTP Port
-.PARAMETER Proxy
-    HTTP/HTTPS Proxy (選填)
-.PARAMETER ProxyCredential
-    Proxy 帳密 (選填)
-#>
+
 param (
     [string]$SRC,
     [Parameter(Mandatory=$true)][string]$Token,
@@ -43,6 +17,8 @@ param (
     [PSCredential]$ProxyCredential = $null
 )
 $start = Get-Date
+$version = "2025-09-05.004"
+
 # -----------------------------
 # 設定 LOG (每日分檔)
 # -----------------------------
@@ -65,6 +41,7 @@ function Write-Log {
 # 清理超過期限的 log
 # -----------------------------
 # 本機 log 保留 7 日
+$logDir = Split-Path $logFile
 Get-ChildItem -Path $logDir -Filter "NICS-Policy-*.log" |
     Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } |
     ForEach-Object {
@@ -82,7 +59,7 @@ if ($NASPath) {
         }
 }
 
-Write-Log "========== NICS-To-Gist.ps1 20250903-001 =========="
+Write-Log "========== NICS-To-Gist.ps1 $version =========="
 # -----------------------------
 # 1?? 建置黑名單檔案
 # -----------------------------
@@ -180,4 +157,4 @@ try {
 $end = Get-Date
 $duration = ($end - $start).TotalSeconds
 Write-Log "        任務完成：$FileName 已同步至 GitHub Gist，總耗時 $duration 秒"
-Write-Log "========== NICS-To-Gist.ps1 20250903-001 =========="
+Write-Log "========== NICS-To-Gist.ps1 END =========="
