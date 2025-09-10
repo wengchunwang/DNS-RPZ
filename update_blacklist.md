@@ -20,3 +20,19 @@ journalctl -u ipset-blacklist.service -b
 sudo iptables -L INPUT -n --line-numbers
 
 
+統計 nics.rpz 命中的查詢數
+
+假設 zone 名稱出現在 log 行中，可以用：
+
+grep 'nics.rpz' /var/cache/bind/logs/rpz.log | wc -l
+
+3️⃣ 按網域統計命中次數
+grep 'nics.rpz' /var/cache/bind/logs/rpz.log | awk '{print $7}' | sort | uniq -c | sort -nr
+
+
+$7 是 query: 後面的網域名稱欄位（依你的 log 格式調整）。
+
+這會輸出被 RPZ 攔截的網域及被查詢次數，從高到低排序。
+
+4️⃣ 監控即時查詢
+tail -f /var/cache/bind/logs/rpz.log | grep 'nics.rpz'
