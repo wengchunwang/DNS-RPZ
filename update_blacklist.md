@@ -74,6 +74,58 @@ sudo crontab -e
 /var/log/blacklist_all.log               # 日誌
 /var/cache/bind/zones/db-rpz       # RPZ zone
 
+
+
+RPZ 查詢統計
+
+BIND RPZ 查詢可透過 log 分析統計：
+
+確認 BIND log 位置，建議配置：
+
+/var/cache/bind/logs/rpz.log
+
+
+統計 nics.rpz 命中次數：
+
+# 統計今天 nics.rpz 查詢命中次數
+grep 'nics.rpz' /var/cache/bind/logs/rpz.log | grep "$(date '+%Y-%m-%d')" | wc -l
+
+
+統計每個 domain 命中次數：
+
+grep 'nics.rpz' /var/cache/bind/logs/rpz.log | awk '{print $7}' | sort | uniq -c | sort -nr | head -20
+
+
+說明：
+
+$7 為 log 中查詢 domain 的欄位，請依實際 log 格式調整。
+
+可改為每天排程產生報表，方便監控 RPZ 命中情況。
+
+注意事項
+
+BIND RPZ zone
+
+確認 zone 名稱 (nics.rpz) 與 BIND 設定一致。
+
+如果 zone 是動態更新 (dynamic)，更新時需使用 rndc freeze/thaw 或 rndc reload。
+
+IP 黑名單
+
+避免直接修改正在使用的 ipset 集合，腳本會使用暫存集合再 swap。
+
+確保 iptables INPUT 鏈有套用正確規則。
+
+權限
+
+腳本需以 root 執行，以便操作 ipset、iptables 與 BIND zone 檔案。
+
+檔案位置建議
+/usr/local/bin/update_blacklist_all.sh   # 腳本
+/var/log/blacklist_all.log               # 日誌
+/var/cache/bind/zones/db-rpz-nics       # RPZ zone
+
+
 授權
 
 MIT License（可依需求修改）
