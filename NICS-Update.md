@@ -58,3 +58,47 @@
   -EnableEventLog `
   -LineToken "xxxxxxxxxx" `
   -SlackWebhook "https://hooks.slack.com/services/xxxxxx"
+
+# NICS-Update.ps1 執行流程圖
+開始
+│
+└─► 下載黑名單
+     │
+     └─► 比對 SHA256
+          │
+          └─► 更新 & 格式轉換
+               │
+               ├─► AdGuard.txt
+               └─► Pi-hole.txt
+                    │
+                    └─► 備份 / 上傳 Gist
+                         │
+                         └─► 發送通知
+                              │
+                              └─► 結束
+
+
+
+
+```mermaid
+flowchart TD
+    A[開始] --> B[下載黑名單 NICS-Policy.tmp]
+    B --> C[比對 SHA256 舊檔 vs 新檔]
+    C -->|相同| D[發送通知: 無更新]
+    D --> E[結束]
+    C -->|不同| F[備份舊 NICS-Policy.txt]
+    F --> G[覆蓋新檔 → NICS-Policy.txt]
+    G --> H[清除舊 Policy]
+    H --> I[重新建立 Policy]
+    I --> J[格式轉換]
+    J --> J1[AdGuard.txt]
+    J --> J2[Pi-hole.txt]
+    J1 --> K[備份至 NAS]
+    J2 --> K
+    K --> L[上傳 GitHub Gist]
+    L --> L1[AdGuard.txt → Gist]
+    L --> L2[Pi-hole.txt → Gist]
+    L1 --> M[清理舊日誌 (本機 + NAS)]
+    L2 --> M
+    M --> N[發送通知 (Email / LINE / Slack / EventLog)]
+    N --> E
