@@ -89,9 +89,8 @@ update_domain_blacklist() {
         rm -f "$tmp_zone"
     fi
 }
-
 # ===== 主程式 =====
 log_message "==== 腳本開始執行 ===="
-update_ip_blacklist
-update_domain_blacklist
+update_ip_blacklist || log_message "[WARN] IP 黑名單更新失敗，繼續執行 Domain 更新"
+update_domain_blacklist || log_message "[WARN] Domain 黑名單更新失敗"
 log_message "==== 腳本執行完成 ===="
