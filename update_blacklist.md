@@ -73,83 +73,92 @@
 #!/bin/bash
 set -euo pipefail
 
-LOG_FILE="/var/log/blacklist_all.log"
+LOG_FILE="/var/log/update_blacklist.log"
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 
-# IP & Domain TOKEN
-TOKENIP="123-456-789"
-TOKENDN="001-002-003"
+TOKEN_IP="123-"        # 你的 IP 黑名單 Token
+TOKEN_DN="456-"        # 你的 Domain 黑名單 Token
 
-IP_BLACKLIST_URL="https://api.url.domain/api/get_blacklist_ip/$TOKENIP"
-IPSET_NAME="blacklist"
+IP_BLACKLIST_URL="https://api.url.domain/api/get_blacklist_ip/$TOKEN_IP"
+IPSET_NAME="BLACKLIST"
 
-DOMAIN_BLACKLIST_URL="https://api.url.domain/api/get_linux_blacklist_dn/$TOKENDN"
+DOMAIN_BLACKLIST_URL="https://api.url.domain/api/get_linux_blacklist_dn/$TOKEN_DN"
 ZONE_FILE="/var/cache/bind/zones/db-rpz-domain"
 
 log_message() {
     echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
 }
 
-# 更新 IP 黑名單並產生異動統計
+# 更新 IP 黑名單並比對異動
 update_ip_blacklist() {
     log_message "==== 開始更新 IP 黑名單 ===="
-    local ip_tmp="/tmp/blacklist_ip.$$"
-    curl -s -o "$ip_tmp" "$IP_BLACKLIST_URL" || { log_message "[ERROR] IP 黑名單下載失敗"; return 1; }
+    local IP_TMP="/tmp/BLACKLIST_IP.$$"
+    curl -s -o "$IP_TMP" "$IP_BLACKLIST_URL" || { log_message "[ERROR] IP 黑名單下載失敗"; return 1; }
 
-    local ip_old="/tmp/ip_old.$$"
-    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$ip_old" 2>/dev/null || true
+    # 舊黑名單快照
+    local IP_OLD="/tmp/IP_OLD.$$"
+    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$IP_OLD" 2>/dev/null || true
 
-    ipset destroy ${IPSET_NAME}_tmp 2>/dev/null || true
-    ipset create ${IPSET_NAME}_tmp hash:ip -exist
-    grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$ip_tmp" | while read -r ip; do
-        ipset add ${IPSET_NAME}_tmp "$ip" -exist
+    # 新暫存 ipset
+    ipset destroy ${IPSET_NAME}_TMP 2>/dev/null || true
+    ipset create ${IPSET_NAME}_TMP hash:ip -exist
+    grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$IP_TMP" | while read -r IP; do
+        ipset add ${IPSET_NAME}_TMP "$IP" -exist
     done
 
     ipset list $IPSET_NAME >/dev/null 2>&1 || ipset create $IPSET_NAME hash:ip
-    ipset swap ${IPSET_NAME}_tmp $IPSET_NAME
-    ipset destroy ${IPSET_NAME}_tmp
+    ipset swap ${IPSET_NAME}_TMP $IPSET_NAME
+    ipset destroy ${IPSET_NAME}_TMP
     iptables -C INPUT -m set --match-set $IPSET_NAME src -j DROP 2>/dev/null || \
         iptables -I INPUT -m set --match-set $IPSET_NAME src -j DROP
 
-    local ip_new="/tmp/ip_new.$$"
-    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$ip_new"
-    local added=$(comm -13 <(sort "$ip_old") <(sort "$ip_new") | wc -l)
-    local removed=$(comm -23 <(sort "$ip_old") <(sort "$ip_new") | wc -l)
-    local total=$(wc -l < "$ip_new")
-    log_message "IP 黑名單匯入完成，共 $total 筆，新增 $added，移除 $removed。"
+    # 比對異動
+    local IP_NEW="/tmp/IP_NEW.$$"
+    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$IP_NEW"
+    local ADDED=$(comm -13 <(sort "$IP_OLD") <(sort "$IP_NEW") | wc -l)
+    local REMOVED=$(comm -23 <(sort "$IP_OLD") <(sort "$IP_NEW") | wc -l)
+    local TOTAL=$(wc -l < "$IP_NEW")
+    log_message "IP 黑名單匯入完成，共 $TOTAL 筆，新增 $ADDED，移除 $REMOVED。"
 
-    rm -f "$ip_tmp" "$ip_old" "$ip_new"
+    rm -f "$IP_TMP" "$IP_OLD" "$IP_NEW"
 }
 
-# 更新 Domain 黑名單並產生異動統計
+# 更新 Domain 黑名單並比對異動
 update_domain_blacklist() {
     log_message "==== 開始更新 Domain 黑名單 ===="
-    local tmp_zone="/tmp/db-rpz-domain.$$"
-    curl -s -o "$tmp_zone" "$DOMAIN_BLACKLIST_URL" || { log_message "[ERROR] Domain 黑名單下載失敗"; return 1; }
+    local TMP_ZONE="/tmp/BLACKLIST_DN.$$"
+    curl -s -o "$TMP_ZONE" "$DOMAIN_BLACKLIST_URL" || { log_message "[ERROR] Domain 黑名單下載失敗"; return 1; }
 
-    if [ -s "$tmp_zone" ]; then
-        local old_domains="/tmp/domains_old.$$"
-        local new_domains="/tmp/domains_new.$$"
-        grep 'CNAME' "$ZONE_FILE" | awk '{print $1}' > "$old_domains" 2>/dev/null || true
-        grep 'CNAME' "$tmp_zone" | awk '{print $1}' > "$new_domains"
+    if [ -s "$TMP_ZONE" ]; then
+        # 舊檔比對
+        local OLD_DOMAINS="/tmp/BLACKLIST_DN_OLD.$$"
+        local NEW_DOMAINS="/tmp/BLACKLIST_DN_NEW.$$"
+        grep 'CNAME' "$ZONE_FILE" | awk '{print $1}' > "$OLD_DOMAINS" 2>/dev/null || true
+        grep 'CNAME' "$TMP_ZONE" | awk '{print $1}' > "$NEW_DOMAINS"
 
-        mv "$tmp_zone" "$ZONE_FILE"
+        # 對動態 zone 使用 freeze/thaw
+        rndc freeze nics.rpz 2>/dev/null || true
+        mv "$TMP_ZONE" "$ZONE_FILE"
         chown bind:bind "$ZONE_FILE"
-        rndc reload domain.rpz || systemctl reload bind9
+        rndc thaw nics.rpz 2>/dev/null || systemctl reload bind9
+        if ! rndc thaw nics.rpz; then
+            log_message "[WARN] rndc thaw 失敗，嘗試重新載入 bind9"
+            systemctl reload bind9
+        fi
 
-        local added=$(comm -13 <(sort "$old_domains") <(sort "$new_domains") | wc -l)
-        local removed=$(comm -23 <(sort "$old_domains") <(sort "$new_domains") | wc -l)
-        local total=$(wc -l < "$new_domains")
-        log_message "Domain 黑名單匯入完成，共 $total 筆，新增 $added，移除 $removed。"
+        local ADDED=$(comm -13 <(sort "$OLD_DOMAINS") <(sort "$NEW_DOMAINS") | wc -l)
+        local REMOVED=$(comm -23 <(sort "$OLD_DOMAINS") <(sort "$NEW_DOMAINS") | wc -l)
+        local TOTAL=$(wc -l < "$NEW_DOMAINS")
+        log_message "Domain 黑名單匯入完成，共 $TOTAL 筆，新增 $ADDED，移除 $REMOVED。"
 
-        rm -f "$old_domains" "$new_domains"
+        rm -f "$OLD_DOMAINS" "$NEW_DOMAINS"
     else
         log_message "[ERROR] 下載的 Domain 黑名單為空檔，保留舊檔。"
-        rm -f "$tmp_zone"
+        rm -f "$TMP_ZONE"
     fi
 }
 
-# 主程式
+# ===== 主程式 =====
 log_message "==== 腳本開始執行 ===="
 update_ip_blacklist
 update_domain_blacklist
