@@ -50,7 +50,7 @@
 ### 腳本路徑
 
 ```text
-/etc/blacklist/update_blacklist_all.sh
+/usr/local/bin/update_blacklist.sh
 ```
 
 ### 核心功能
@@ -71,28 +71,30 @@
 
 ```bash
 #!/bin/bash
-LOG_FILE="/var/log/update_blacklist.log"
-REPORT_SUMMARY=""
-MAIL_TO=""
-MAIL_FROM=""
 
 # ----------------------------
 # 設定區
 # ----------------------------
 PROXY_SERVER=""
+LOG_FILE="/var/log/update_blacklist.log"
+REPORT_SUMMARY=""
+MAIL_TO="log@domain.org"    # 必填
+MAIL_FROM="blacklist@server.local"
+MAIL_SUBJECT=""
 TOKEN_IP=""        # 你的 IP 黑名單 Token
 TOKEN_DN=""        # 你的 Domain 黑名單 Token
 URL_BLACKLIST_IP="https://api.url.domain/api/get_blacklist_ip/$TOKEN_IP"
 URL_BLACKLIST_DN="https://api.url.domain/api/get_blacklist_dn/$TOKEN_DN"
-IPSET_NAME=""
-ZONE_FILE="/var/cache/bind/zones/db-rpz-domain"
+IPSET_NAME="blacklist" # 若要更改名稱，請同時修改 iptables 規則。
+ZONE_RPZ="domain.rpz"
+ZONE_FILE="/var/cache/bind/zones/db-rpz-domain" #請確認下載的 RPZ zone file 已包含正確的 SOA serial，否則建議在更新時自動遞增 serial。
 
 # ----------------------------
 # 函數：日誌紀錄
 # ----------------------------
 log_message() {
     local MSG="$1"
-    echo "$(date '+%Y/%m/%d %H:%M:%S') $MSG" | tee -a "$LOG_FILE"
+    echo "[$(date '+%Y/%m/%d %H:%M:%S')] $MSG" | tee -a "$LOG_FILE"
 }
 
 # ----------------------------
@@ -130,7 +132,12 @@ update_ip_blacklist() {
         ipset add ${IPSET_NAME}_TMP "$IP" -exist
     done
 
-    ipset list $IPSET_NAME >/dev/null 2>&1 || ipset create $IPSET_NAME hash:ip
+    log_message "[INFO] 初始化 ipset $IPSET_NAME"
+    
+    if ! ipset list $IPSET_NAME >/dev/null 2>&1; then
+	    log_message "[INFO] 初始化 ipset $IPSET_NAME"
+		ipset create $IPSET_NAME hash:ip
+	fi
 
     if ipset swap ${IPSET_NAME}_TMP $IPSET_NAME; then
         log_message "IP set 交換完成。"
@@ -186,14 +193,16 @@ update_domain_blacklist() {
 
         if check_bind_service; then
             log_message "偵測到 bind9 服務正在運行。"
-            rndc freeze nics.rpz 2>/dev/null || log_message "[WARN] rndc freeze 失敗，可能不是動態 zone。"
+            rndc freeze $ZONE_RPZ 2>/dev/null || log_message "[WARN] rndc freeze 失敗，可能不是動態 zone。"
         fi
 
-        mv "$TMP_ZONE" "$ZONE_FILE"
+        cp "$TMP_ZONE" "$ZONE_FILE.new"
+		named-checkzone $ZONE_RPZ "$ZONE_FILE.new" && mv "$ZONE_FILE.new" "$ZONE_FILE"
+
         chown bind:bind "$ZONE_FILE"
 
         if check_bind_service; then
-            if ! rndc thaw nics.rpz; then
+            if ! rndc thaw $ZONE_RPZ; then
                 log_message "[WARN] rndc thaw 失敗，嘗試重新載入 bind9。"
                 systemctl reload bind9
             fi
@@ -232,7 +241,11 @@ log_message "==== 黑名單更新完成 ===="
 
 # 寄送郵件報告
 if command -v mail >/dev/null 2>&1; then
-    echo -e "執行完成，以下為更新摘要：\n\n$REPORT_SUMMARY" | mail -s "Update Report $(date '+%Y/%m/%d %H:%M:%S')" -r "$MAIL_FROM" "$MAIL_TO"
+    STATUS="SUCCESS"
+    [[ "$REPORT_SUMMARY" =~ "失敗" ]] && STATUS="FAIL"
+    MAIL_SUBJECT="[Blacklist Update][$STATUS] $(hostname) $(date '+%Y-%m-%d %H:%M')"
+    MAIL_BODY="主機: $(hostname) \n\n 時間: $(date '+%Y-%m-%d %H:%M:%S') \n\n執行完成，以下為更新摘要：\n\n$REPORT_SUMMARY"
+    echo -e "$MAIL_BODY" | mail -s "$MAIL_SUBJECT" -r "$MAIL_FROM" "$MAIL_TO"
 else
     log_message "[WARN] 'mail' 指令不存在，跳過郵件通知。"
 fi
@@ -242,11 +255,12 @@ fi
 
 ## 5. 日誌與 logrotate
 
-### 日誌路徑
+### 日誌路徑 
 
 ```text
 /var/log/update_blacklist.log
 ```
+確保 /var/log/update_blacklist.log 所有者為 root，並允許 blacklist 腳本追加寫入。
 
 ### logrotate 設定
 
@@ -259,12 +273,10 @@ fi
     compress
     missingok
     notifempty
-    create 644 root root
-    postrotate
-        systemctl restart bind9 >/dev/null 2>&1 || true
-    endscript
+    create 640 root adm
 }
 ```
+
 
 ---
 
@@ -279,8 +291,11 @@ sudo crontab -e
 加入：
 
 ```cron
-*/30 * * * * /etc/blacklist/update_blacklist.sh
+# 建議將 stderr 一併導入 log
+*/30 * * * * /usr/local/bin/update_blacklist.sh >> /var/log/update_blacklist.log 2>&1
 ```
+
+# 建議：也可改放 /etc/cron.d/update_blacklist
 
 ---
 
@@ -322,6 +337,7 @@ grep 'zone.rpz' /var/cache/bind/logs/rpz.log | awk '{print $7}' | sort | uniq -c
 
 > 說明：
 > - `$7` 為 log 中查詢 domain 的欄位，請依實際 log 格式調整。
+> - `$7` 可能依 BIND log 格式不同而需調整，請先 tail -f /var/cache/bind/logs/rpz.log 確認欄位。
 > - 可改為每天排程產生報表，方便監控 RPZ 命中情況。
 
 ---
@@ -340,4 +356,3 @@ grep 'zone.rpz' /var/cache/bind/logs/rpz.log | awk '{print $7}' | sort | uniq -c
 - [BIND RPZ 官方文件](https://www.isc.org/bind/)
 - [ipset 官方文件](https://ipset.netfilter.org/)
 - [iptables 官方文件](https://netfilter.org/projects/iptables/index.html)
-
