@@ -74,7 +74,7 @@ update_domain_blacklist() {
         chown bind:bind "$ZONE_FILE"
 		rndc thaw nics.rpz 2>/dev/null || systemctl reload bind9
         if ! rndc thaw nics.rpz; then
-			log_message [WARN] rndc thaw 失敗，嘗試重新載入 bind9"
+			log_message "[WARN] rndc thaw 失敗，嘗試重新載入 bind9"
 			systemctl reload bind9
         fi
 
