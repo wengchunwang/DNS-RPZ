@@ -19,7 +19,7 @@
 - 安裝套件：
   ```bash
   sudo apt update
-  sudo apt install bind9 iptables ipset curl
+  sudo apt install bind9 iptables ipset curl mailutils
   ```
 - BIND 設定 RPZ zone：
   ```bind
@@ -82,10 +82,10 @@ MAIL_FROM=""
 PROXY_SERVER=""
 TOKEN_IP=""        # 你的 IP 黑名單 Token
 TOKEN_DN=""        # 你的 Domain 黑名單 Token
-URL_BLACKLIST_IP="https://api/$TOKEN_IP"
-URL_BLACKLIST_DN="https://api/$TOKEN_DN"
+URL_BLACKLIST_IP="https://api.url.domain/api/get_blacklist_ip/$TOKEN_IP"
+URL_BLACKLIST_DN="https://api.url.domain/api/get_blacklist_dn/$TOKEN_DN"
 IPSET_NAME=""
-ZONE_FILE=""
+ZONE_FILE="/var/cache/bind/zones/db-rpz-domain"
 
 # ----------------------------
 # 函數：日誌紀錄
@@ -226,8 +226,8 @@ update_domain_blacklist() {
 # 主程式
 # ----------------------------
 log_message "==== 開始黑名單更新流程 ===="
-update_ip_blacklist
-update_domain_blacklist
+update_ip_blacklist || log_message "[WARN] IP 黑名單更新失敗，繼續執行 Domain 更新"
+update_domain_blacklist || log_message "[WARN] Domain 黑名單更新失敗"
 log_message "==== 黑名單更新完成 ===="
 
 # 寄送郵件報告
@@ -245,15 +245,15 @@ fi
 ### 日誌路徑
 
 ```text
-/var/log/blacklist_all.log
+/var/log/update_blacklist.log
 ```
 
 ### logrotate 設定
 
-建立 `/etc/logrotate.d/blacklist_all`：
+建立 `/etc/logrotate.d/update_blacklist`：
 
 ```text
-/var/log/blacklist_all.log {
+/var/log/update_blacklist.log {
     daily
     rotate 14
     compress
@@ -279,7 +279,7 @@ sudo crontab -e
 加入：
 
 ```cron
-*/30 * * * * /etc/blacklist/update_blacklist_all.sh
+*/30 * * * * /etc/blacklist/update_blacklist.sh
 ```
 
 ---
@@ -298,8 +298,8 @@ sudo crontab -e
 ## 8. 檔案位置建議
 
 ```
-/usr/local/bin/update_blacklist_all.sh   # 腳本
-/var/log/blacklist_all.log               # 日誌
+/usr/local/bin/update_blacklist.sh   # 腳本
+/var/log/update_blacklist.log               # 日誌
 /var/cache/bind/zones/db-rpz            # RPZ zone
 ```
 
