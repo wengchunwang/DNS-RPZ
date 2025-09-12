@@ -6,8 +6,6 @@
 set -euo pipefail
 
 LOG_FILE="/var/log/blacklist_all.log"
-TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
-
 TOKENIP="123-456-789"        # 你的 IP 黑名單 Token
 TOKENDN="987-654-321"        # 你的 Domain 黑名單 Token
 
@@ -16,81 +14,187 @@ IPSET_NAME="blacklist"
 
 DOMAIN_BLACKLIST_URL="https://ironcloak.nics.nat.gov.tw/api/get_linux_blacklist_dn/$TOKENDN"
 ZONE_FILE="/var/cache/bind/zones/db-rpz-domain"
+RUN_TYPE="${1:-manual}"  # 默認 manual
 
+# ----------------------------
+# 函數：日誌紀錄
+# ----------------------------
 log_message() {
-    echo "[$TIMESTAMP] $1" >> "$LOG_FILE"
+    local MSG="$1"
+    echo "[$(date '+%Y/%m/%d %H:%M:%S')] $MSG ($RUN_TYPE)" | tee -a "$LOG_FILE"
 }
 
-# 更新 IP 黑名單並比對異動
+# ----------------------------
+# 函數：檢查 ipset 是否可用
+# ----------------------------
+check_ipset() {
+    command -v ipset >/dev/null 2>&1
+}
+
+# ----------------------------
+# 函數：檢查 bind9 是否運行
+# ----------------------------
+check_bind_service() {
+    systemctl is-active --quiet bind9
+}
+
+# ----------------------------
+# 函數：更新 IP 黑名單
+# ----------------------------
 update_ip_blacklist() {
     log_message "==== 開始更新 IP 黑名單 ===="
-    local ip_tmp="/tmp/blacklist_ip.$$"
-    curl -s -o "$ip_tmp" "$IP_BLACKLIST_URL" || { log_message "[ERROR] IP 黑名單下載失敗"; return 1; }
+    local IP_TMP="/tmp/BLACKLIST_IP.$$"
 
-    # 舊黑名單快照
-    local ip_old="/tmp/ip_old.$$"
-    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$ip_old" 2>/dev/null || true
+    # 設定 curl 選項
+    local CURL_OPT=(-s)
+    [ -n "$PROXY_SERVER" ] && CURL_OPT+=(--proxy "$PROXY_SERVER")
 
-    # 新暫存 ipset
-    ipset destroy ${IPSET_NAME}_tmp 2>/dev/null || true
-    ipset create ${IPSET_NAME}_tmp hash:ip -exist
-    grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$ip_tmp" | while read -r ip; do
-        ipset add ${IPSET_NAME}_tmp "$ip" -exist
+    curl "${CURL_OPT[@]}" -o "$IP_TMP" "$URL_BLACKLIST_IP" || {
+        log_message "[ERROR] IP 黑名單下載失敗。"
+        REPORT_SUMMARY+="IP 黑名單更新失敗。\n"
+        return 1
+    }
+
+    local IP_OLD="/tmp/IP_OLD.$$"
+    local IP_NEW="/tmp/IP_NEW.$$"
+
+    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$IP_OLD" 2>/dev/null || true
+
+    ipset destroy ${IPSET_NAME}_TMP 2>/dev/null || true
+    ipset create ${IPSET_NAME}_TMP hash:ip -exist
+    grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' "$IP_TMP" | while read -r IP; do
+        ipset add ${IPSET_NAME}_TMP "$IP" -exist
     done
 
-    ipset list $IPSET_NAME >/dev/null 2>&1 || ipset create $IPSET_NAME hash:ip
-    ipset swap ${IPSET_NAME}_tmp $IPSET_NAME
-    ipset destroy ${IPSET_NAME}_tmp
+    log_message "[INFO] 初始化 ipset $IPSET_NAME"
+
+    if ! ipset list $IPSET_NAME >/dev/null 2>&1; then
+            log_message "[INFO] 初始化 ipset $IPSET_NAME"
+                ipset create $IPSET_NAME hash:ip
+        fi
+
+    if ipset swap ${IPSET_NAME}_TMP $IPSET_NAME; then
+        log_message "IP set 交換完成。"
+    else
+        log_message "[WARN] IP set 交換失敗，可能存在重複的 ipset 名稱。"
+    fi
+
+    ipset destroy ${IPSET_NAME}_TMP
+
     iptables -C INPUT -m set --match-set $IPSET_NAME src -j DROP 2>/dev/null || \
         iptables -I INPUT -m set --match-set $IPSET_NAME src -j DROP
 
-    # 比對異動
-    local ip_new="/tmp/ip_new.$$"
-    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$ip_new"
-    local added=$(comm -13 <(sort "$ip_old") <(sort "$ip_new") | wc -l)
-    local removed=$(comm -23 <(sort "$ip_old") <(sort "$ip_new") | wc -l)
-    local total=$(wc -l < "$ip_new")
-    log_message "IP 黑名單匯入完成，共 $total 筆，新增 $added，移除 $removed。"
+    ipset list $IPSET_NAME | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' > "$IP_NEW"
 
-    rm -f "$ip_tmp" "$ip_old" "$ip_new"
+    local ADDED=$(comm -13 <(sort "$IP_OLD") <(sort "$IP_NEW") | wc -l)
+    local REMOVED=$(comm -23 <(sort "$IP_OLD") <(sort "$IP_NEW") | wc -l)
+    local TOTAL=$(wc -l < "$IP_NEW")
+
+    if [ "$ADDED" -gt 0 ] || [ "$REMOVED" -gt 0 ]; then
+        log_message "IP 黑名單匯入完成，共 $TOTAL 筆，新增 $ADDED，移除 $REMOVED。"
+        REPORT_SUMMARY+="IP 黑名單更新：新增 $ADDED，移除 $REMOVED，總計 $TOTAL 筆。\n"
+    else
+        log_message "IP 黑名單無異動，共 $TOTAL 筆。"
+        REPORT_SUMMARY+="IP 黑名單更新：無異動，總計 $TOTAL 筆。\n"
+    fi
+
+    rm -f "$IP_TMP" "$IP_OLD" "$IP_NEW"
+    return 0
 }
 
-# 更新 Domain 黑名單並比對異動
+# ----------------------------
+# 函數：更新 Domain 黑名單
+# ----------------------------
 update_domain_blacklist() {
     log_message "==== 開始更新 Domain 黑名單 ===="
-    local tmp_zone="/tmp/blacklist_dn.$$"
-    curl -s -o "$tmp_zone" "$DOMAIN_BLACKLIST_URL" || { log_message "[ERROR] Domain 黑名單下載失敗"; return 1; }
+    local TMP_ZONE="/tmp/BLACKLIST_DN.$$"
 
-    if [ -s "$tmp_zone" ]; then
-        # 舊檔比對
-        local old_domains="/tmp/blacklist_dn_old.$$"
-        local new_domains="/tmp/blacklist_dn_new.$$"
-        grep 'CNAME' "$ZONE_FILE" | awk '{print $1}' > "$old_domains" 2>/dev/null || true
-        grep 'CNAME' "$tmp_zone" | awk '{print $1}' > "$new_domains"
+    # 設定 curl 選項
+    local CURL_OPT=(-s)
+    [ -n "$PROXY_SERVER" ] && CURL_OPT+=(--proxy "$PROXY_SERVER")
 
-		# 對動態 zone 使用 freeze/thaw
-		rndc freeze nics.rpz 2>/dev/null || true
-        mv "$tmp_zone" "$ZONE_FILE"
-        chown bind:bind "$ZONE_FILE"
-		rndc thaw nics.rpz 2>/dev/null || systemctl reload bind9
-        if ! rndc thaw nics.rpz; then
-			log_message "[WARN] rndc thaw 失敗，嘗試重新載入 bind9"
-			systemctl reload bind9
+    curl "${CURL_OPT[@]}" -o "$TMP_ZONE" "$URL_BLACKLIST_DN" || {
+        log_message "[ERROR] Domain 黑名單下載失敗。"
+        REPORT_SUMMARY+="Domain 黑名單更新失敗。\n"
+        return 1
+    }
+
+    if [ -s "$TMP_ZONE" ]; then
+        local OLD_DOMAINS="/tmp/BLACKLIST_DN_OLD.$$"
+        local NEW_DOMAINS="/tmp/BLACKLIST_DN_NEW.$$"
+        grep 'CNAME' "$ZONE_FILE" | awk '{print $1}' > "$OLD_DOMAINS" 2>/dev/null || true
+        grep 'CNAME' "$TMP_ZONE" | awk '{print $1}' > "$NEW_DOMAINS"
+
+        if check_bind_service; then
+            log_message "偵測到 bind9 服務正在運行。"
+            rndc freeze $ZONE_RPZ 2>/dev/null || log_message "[WARN] rndc freeze 失敗，可能不是動態 zone。"
         fi
 
-        local added=$(comm -13 <(sort "$old_domains") <(sort "$new_domains") | wc -l)
-        local removed=$(comm -23 <(sort "$old_domains") <(sort "$new_domains") | wc -l)
-        local total=$(wc -l < "$new_domains")
-        log_message "Domain 黑名單匯入完成，共 $total 筆，新增 $added，移除 $removed。"
+        cp "$TMP_ZONE" "$ZONE_FILE.new"
+                named-checkzone $ZONE_RPZ "$ZONE_FILE.new" && mv "$ZONE_FILE.new" "$ZONE_FILE"
 
-        rm -f "$old_domains" "$new_domains"
+        chown bind:bind "$ZONE_FILE"
+
+        if check_bind_service; then
+            if ! rndc thaw $ZONE_RPZ; then
+                log_message "[WARN] rndc thaw 失敗，嘗試重新載入 bind9。"
+                systemctl reload bind9
+            fi
+        else
+            log_message "[INFO] bind9 服務未運行，跳過 rndc 相關操作。"
+        fi
+
+        local ADDED=$(comm -13 <(sort "$OLD_DOMAINS") <(sort "$NEW_DOMAINS") | wc -l)
+        local REMOVED=$(comm -23 <(sort "$OLD_DOMAINS") <(sort "$NEW_DOMAINS") | wc -l)
+        local TOTAL=$(wc -l < "$NEW_DOMAINS")
+
+        if [ "$ADDED" -gt 0 ] || [ "$REMOVED" -gt 0 ]; then
+            log_message "Domain 黑名單匯入完成，共 $TOTAL 筆，新增 $ADDED，移除 $REMOVED。"
+            REPORT_SUMMARY+="Domain 黑名單更新：新增 $ADDED，移除 $REMOVED，總計 $TOTAL 筆。\n"
+        else
+            log_message "Domain 黑名單無異動，共 $TOTAL 筆。"
+            REPORT_SUMMARY+="Domain 黑名單更新：無異動，總計 $TOTAL 筆。\n"
+        fi
+
+        rm -f "$OLD_DOMAINS" "$NEW_DOMAINS"
     else
         log_message "[ERROR] 下載的 Domain 黑名單為空檔，保留舊檔。"
-        rm -f "$tmp_zone"
+        REPORT_SUMMARY+="Domain 黑名單下載為空檔，更新失敗。\n"
+        rm -f "$TMP_ZONE"
     fi
+    return 0
 }
-# ===== 主程式 =====
-log_message "==== 腳本開始執行 ===="
-update_ip_blacklist || log_message "[WARN] IP 黑名單更新失敗，繼續執行 Domain 更新"
-update_domain_blacklist || log_message "[WARN] Domain 黑名單更新失敗"
-log_message "==== 腳本執行完成 ===="
+
+# ----------------------------
+# 主程式
+# ----------------------------
+log_message "==== 開始黑名單更新流程 ===="
+
+# ----------------------------
+# IP 黑名單更新
+# ----------------------------
+if check_ipset; then
+    log_message "偵測到 ipset 可用，開始更新 IP 黑名單..."
+    update_ip_blacklist || log_message "[WARN] IP 黑名單更新失敗，繼續執行 Domain 更新"
+else
+    log_message "系統未安裝 ipset，跳過 IP 黑名單更新。"
+fi
+if check_bind_service; then
+    log_message "偵測到 bind9 服務正在運行，開始更新 Domain 黑名單..."
+    # 執行 Domain 黑名單更新程式區塊
+    update_domain_blacklist || log_message "[WARN] Domain 黑名單更新失敗"
+else
+    log_message "系統未安裝或未啟動 bind9，跳過 Domain 黑名單更新。"
+fi
+log_message "==== 黑名單更新完成 ===="
+
+# 寄送郵件報告
+if command -v mail >/dev/null 2>&1; then
+    STATUS="SUCCESS"
+    [[ "$REPORT_SUMMARY" =~ "失敗" ]] && STATUS="FAIL"
+    MAIL_SUBJECT="[NICS] [$STATUS] $(hostname) $(date '+%Y-%m-%d %H:%M') 國家資通安全研究院 [黑名單自動部署服務系統 Iron Cloak]"
+    MAIL_BODY="主機: $(hostname) \n\n時間: $(date '+%Y-%m-%d %H:%M:%S') \n\n執行完成，以下為更新摘要：\n\n$REPORT_SUMMARY"
+    echo -e "$MAIL_BODY" | mail -s "$MAIL_SUBJECT" -r "$MAIL_FROM" "$MAIL_TO"
+else
+    log_message "[WARN] 'mail' 指令不存在，跳過郵件通知。"
+fi
