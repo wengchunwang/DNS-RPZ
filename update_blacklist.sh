@@ -1,19 +1,23 @@
 #!/bin/bash
 # Ubuntu 24.04 LTS
-# 整合 IP + Domain 黑名單自動更新，並產生異動統計
-# Log: /var/log/blacklist_all.log
-
 set -euo pipefail
 
-LOG_FILE="/var/log/blacklist_all.log"
-TOKENIP="123-456-789"        # 你的 IP 黑名單 Token
-TOKENDN="987-654-321"        # 你的 Domain 黑名單 Token
-
-IP_BLACKLIST_URL="https://ironcloak.nics.nat.gov.tw/api/get_blacklist_ip/$TOKENIP"
-IPSET_NAME="blacklist"
-
-DOMAIN_BLACKLIST_URL="https://ironcloak.nics.nat.gov.tw/api/get_linux_blacklist_dn/$TOKENDN"
-ZONE_FILE="/var/cache/bind/zones/db-rpz-domain"
+# ----------------------------
+# 設定區
+# ----------------------------
+PROXY_SERVER=""
+LOG_FILE="/var/log/update_blacklist.log"
+REPORT_SUMMARY=""
+MAIL_TO="log@domain.org"    # 必填
+MAIL_FROM="blacklist@server.local"
+MAIL_SUBJECT=""
+TOKEN_IP=""        # 你的 IP 黑名單 Token
+TOKEN_DN=""        # 你的 Domain 黑名單 Token
+URL_BLACKLIST_IP="https://api.url.domain/api/get_blacklist_ip/$TOKEN_IP"
+URL_BLACKLIST_DN="https://api.url.domain/api/get_blacklist_dn/$TOKEN_DN"
+IPSET_NAME="blacklist" # 若要更改名稱，請同時修改 iptables 規則。
+ZONE_RPZ="domain.rpz"
+ZONE_FILE="/var/cache/bind/zones/db-rpz-domain" #請確認下載的 RPZ zone file 已包含正確的 SOA serial，否則建議在更新時自動遞增 serial。
 RUN_TYPE="${1:-manual}"  # 默認 manual
 
 # ----------------------------
@@ -192,7 +196,7 @@ log_message "==== 黑名單更新完成 ===="
 if command -v mail >/dev/null 2>&1; then
     STATUS="SUCCESS"
     [[ "$REPORT_SUMMARY" =~ "失敗" ]] && STATUS="FAIL"
-    MAIL_SUBJECT="[NICS] [$STATUS] $(hostname) $(date '+%Y-%m-%d %H:%M') 國家資通安全研究院 [黑名單自動部署服務系統 Iron Cloak]"
+    MAIL_SUBJECT="[$STATUS] $(hostname) $(date '+%Y-%m-%d %H:%M')"
     MAIL_BODY="主機: $(hostname) \n\n時間: $(date '+%Y-%m-%d %H:%M:%S') \n\n執行完成，以下為更新摘要：\n\n$REPORT_SUMMARY"
     echo -e "$MAIL_BODY" | mail -s "$MAIL_SUBJECT" -r "$MAIL_FROM" "$MAIL_TO"
 else
