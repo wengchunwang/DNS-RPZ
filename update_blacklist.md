@@ -65,7 +65,7 @@
 - 異動統計：
   - 每次更新記錄新增與移除筆數
 - 日誌：
-  - `/var/log/blacklist_all.log`
+  - `/var/log/update_blacklist.log`
 
 ### 腳本範例
 
