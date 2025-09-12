@@ -293,7 +293,7 @@ sudo crontab -e
 ```cron
 # 建議將 stderr 一併導入 log
 @reboot /usr/local/bin/update_blacklist.sh boot >> /var/log/update_blacklist.log 2>&1
-*/30 * * * * /usr/local/bin/update_blacklist.sh cron >> /var/log/update_blacklist.log 2>&1
+30 6 * * * /usr/local/bin/update_blacklist.sh cron >> /var/log/update_blacklist.log 2>&1
 ```
 
 # 建議：也可改放 /etc/cron.d/update_blacklist
@@ -303,10 +303,15 @@ sudo crontab -e
 ## 7. 日誌範例
 
 ```
-[2025-09-10 15:30:01] ==== 開始更新黑名單 ====
-[2025-09-10 15:30:01] IP 黑名單匯入完成，共 2793 筆，新增 12，移除 0。
-[2025-09-10 15:30:01] Domain 黑名單匯入完成，共 202 筆，新增 3，移除 1。
-[2025-09-10 15:30:01] ==== 黑名單更新完成 ====
+[2025/09/01 06:30:00] ==== 開始黑名單更新流程 ==== (cron)
+[2025/09/01 06:30:00] ==== 開始更新 IP 黑名單 ==== (cron)
+[2025/09/01 06:30:00] [INFO] 初始化 ipset blacklist_nics (cron)
+[2025/09/01 06:30:00] IP set 交換完成。 (cron)
+[2025/09/01 06:30:00] IP 黑名單無異動，共 2791 筆。 (cron)
+[2025/09/01 06:30:00] ==== 開始更新 Domain 黑名單 ==== (cron)
+[2025/09/01 06:30:00] 偵測到 bind9 服務正在運行。 (cron)
+[2025/09/01 06:30:00] Domain 黑名單無異動，共 205 筆。 (cron)
+[2025/09/01 06:30:00] ==== 黑名單更新完成 ==== (cron)
 ```
 
 ---
