@@ -25,7 +25,13 @@ RUN_TYPE="${1:-manual}"  # 默認 manual
 # ----------------------------
 log_message() {
     local MSG="$1"
-    echo "[$(date '+%Y/%m/%d %H:%M:%S')] $MSG ($RUN_TYPE)" | tee -a "$LOG_FILE"
+	if [ "$RUN_TYPE" = "manual" ]; then
+        # 手動執行時，同時輸出到螢幕和日誌檔案
+        echo "[$(date '+%Y/%m/%d %H:%M:%S')] $MSG ($RUN_TYPE)" | tee -a "$LOG_FILE"
+    else
+        # 其他情況（例如 cron），只寫入日誌檔案
+        echo "[$(date '+%Y/%m/%d %H:%M:%S')] $MSG ($RUN_TYPE)" >> "$LOG_FILE"
+    fi
 }
 
 # ----------------------------
