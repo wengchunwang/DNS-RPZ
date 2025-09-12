@@ -145,11 +145,15 @@ update_ip_blacklist() {
 		ipset create $IPSET_NAME hash:ip
 	fi
 
-    if ipset swap ${IPSET_NAME}_TMP $IPSET_NAME; then
-        log_message "IP set 交換完成。"
-    else
-        log_message "[WARN] IP set 交換失敗，可能存在重複的 ipset 名稱。"
-    fi
+	if ipset swap ${IPSET_NAME}_TMP $IPSET_NAME; then
+    	log_message "IP set 交換完成。"
+	else
+    	log_message "[WARN] IP set 交換失敗，改用 flush + restore。"
+    	ipset flush $IPSET_NAME
+    	ipset list ${IPSET_NAME}_TMP | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' | while read -r IP; do
+    	    ipset add $IPSET_NAME "$IP" -exist
+    	done
+	fi
 
     ipset destroy ${IPSET_NAME}_TMP
 
