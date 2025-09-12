@@ -292,7 +292,8 @@ sudo crontab -e
 
 ```cron
 # 建議將 stderr 一併導入 log
-*/30 * * * * /usr/local/bin/update_blacklist.sh >> /var/log/update_blacklist.log 2>&1
+@reboot /usr/local/bin/update_blacklist.sh boot >> /var/log/update_blacklist.log 2>&1
+*/30 * * * * /usr/local/bin/update_blacklist.sh cron >> /var/log/update_blacklist.log 2>&1
 ```
 
 # 建議：也可改放 /etc/cron.d/update_blacklist
